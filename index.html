@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US State Chatbot Bill Tracker 2025–2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F4F0E8;
+  --surface:#FFFFFF;
+  --surface2:#EDE8E0;
+  --border:#D4CEC4;
+  --text:#1A1612;
+  --text-dim:#4E4844;
+  --text-muted:#8A847C;
+  --forest:#1E5C42;
+  --rust:#8B4020;
+  --slate:#364878;
+  --plum:#5C3868;
+  --amber:#8A6218;
+}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+h1,h2,h3,.tile-name,.modal-header h2,.bill-name{font-family:'Space Grotesk',sans-serif}
+
+/* HERO (title + charts two-column) */
+.hero-section{width:100%;padding:1.25rem 2rem;display:grid;grid-template-columns:2fr 3fr;gap:2rem;align-items:center;border-bottom:1px solid var(--border);box-sizing:border-box;height:100svh;position:relative}
+#scrollHint{position:absolute;bottom:1.75rem;left:50%;display:none;color:#2A2624;pointer-events:none;z-index:5}
+#scrollHint.visible{display:block;animation:scrollHintAnim 4s ease-in-out forwards}
+@keyframes scrollHintAnim{
+  0%  {opacity:0;transform:translateX(-50%) translateY(0)}
+  10% {opacity:0.75;transform:translateX(-50%) translateY(0)}
+  28% {opacity:0.75;transform:translateX(-50%) translateY(8px)}
+  42% {opacity:0.75;transform:translateX(-50%) translateY(0)}
+  56% {opacity:0.75;transform:translateX(-50%) translateY(6px)}
+  70% {opacity:0.75;transform:translateX(-50%) translateY(0)}
+  85% {opacity:0.2;transform:translateX(-50%) translateY(0)}
+  100%{opacity:0;transform:translateX(-50%) translateY(0)}
+}
+.hero-title-card{display:flex;flex-direction:column;gap:0.65rem;padding:0.5rem 0;transform:translateY(-1.5rem)}
+.session-badge{display:inline-block;background:rgba(30,92,66,0.1);border:1px solid rgba(30,92,66,0.3);color:#1E5C42;font-size:0.7rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:0.3rem 0.9rem;border-radius:9999px;align-self:flex-start}
+.hero-title-card h1{font-size:clamp(1rem,1.8vw,1.45rem);font-weight:800;color:var(--text);letter-spacing:-0.02em;line-height:1.25}
+.hero-title-card p:not(.hero-updated){color:var(--text-dim);font-size:0.82rem;line-height:1.65}
+.hero-updated{font-size:0.68rem;color:var(--text-muted);letter-spacing:0.01em}
+.hero-charts{display:grid;grid-template-columns:1fr;gap:0.6rem;grid-template-rows:1fr 1fr 1fr;height:calc(100svh - 3.5rem);align-self:center}
+
+/* STATS (kept for .stat-card reuse) */
+.stats-section{display:none}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:0.7rem 1.1rem;height:100%;overflow:visible}
+.stat-card h3{font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem}
+.chart-wrap{position:relative;width:100%;max-width:130px;margin:0 auto;overflow:visible}
+.chart-total{font-size:0.68rem;color:var(--text-muted);text-align:center;margin-top:0.4rem}
+.chart-legend{display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:0.4rem 1rem;margin-top:0.4rem}
+.legend-item{display:flex;align-items:center;gap:0.35rem;font-size:0.7rem;color:var(--text-dim);white-space:nowrap}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* MAP */
+.map-section{width:100%;padding:1.25rem 2rem;box-sizing:border-box}
+.map-inner{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.25rem}
+.map-title{font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.6rem;font-family:'Space Grotesk',sans-serif}
+#usMap{max-height:calc(100vh - 220px)}
+#usMap svg{width:100%;height:100%;display:block;max-height:calc(100vh - 220px)}
+.map-tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.5rem 0.75rem;border-radius:8px;font-size:0.78rem;pointer-events:none;opacity:0;transition:opacity 0.12s;z-index:500;white-space:nowrap}
+.map-tooltip strong{display:block;font-family:'Space Grotesk',sans-serif;font-size:0.82rem;margin-bottom:0.1rem}
+.map-legend{display:flex;flex-wrap:wrap;gap:0.4rem 0.9rem;margin-top:0.6rem;align-items:center}
+.map-legend-item{display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;color:var(--text-dim)}
+.map-legend-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+
+/* FILTER BAR */
+.filter-bar{position:sticky;top:0;z-index:100;background:rgba(244,240,232,0.97);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0.85rem 2rem}
+.filter-inner{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:0.6rem}
+.filter-label{font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap}
+.filter-search{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0.38rem 0.75rem;font-size:0.82rem;outline:none;transition:border-color 0.2s;min-width:140px}
+.filter-search:focus{border-color:var(--forest)}
+.filter-search::placeholder{color:var(--text-muted)}
+.filter-btn{border-radius:8px;padding:0.38rem 0.8rem;font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.filter-btn[data-filter="scope-general"]{background:rgba(30,92,66,0.08);border:1px solid rgba(30,92,66,0.3);color:#1E5C42}
+.filter-btn[data-filter="scope-general"]:hover{background:rgba(30,92,66,0.15);border-color:rgba(30,92,66,0.5)}
+.filter-btn[data-filter="scope-general"].active{background:#1E5C42;border-color:#124030;color:#fff}
+.filter-btn[data-filter="scope-minor"]{background:rgba(92,56,104,0.08);border:1px solid rgba(92,56,104,0.28);color:#5C3868}
+.filter-btn[data-filter="scope-minor"]:hover{background:rgba(92,56,104,0.15);border-color:rgba(92,56,104,0.5)}
+.filter-btn[data-filter="scope-minor"].active{background:#5C3868;border-color:#3A2045;color:#fff}
+.filter-btn[data-filter="type-general"]{background:rgba(54,72,120,0.08);border:1px solid rgba(54,72,120,0.28);color:#364878}
+.filter-btn[data-filter="type-general"]:hover{background:rgba(54,72,120,0.15);border-color:rgba(54,72,120,0.5)}
+.filter-btn[data-filter="type-general"].active{background:#364878;border-color:#223060;color:#fff}
+.filter-btn[data-filter="type-companion"]{background:rgba(139,64,32,0.08);border:1px solid rgba(139,64,32,0.28);color:#8B4020}
+.filter-btn[data-filter="type-companion"]:hover{background:rgba(139,64,32,0.15);border-color:rgba(139,64,32,0.5)}
+.filter-btn[data-filter="type-companion"].active{background:#8B4020;border-color:#5A2810;color:#fff}
+.filter-divider{width:1px;height:22px;background:var(--border)}
+.reset-btn{background:transparent;border:none;color:var(--text-muted);font-size:0.75rem;cursor:pointer;padding:0.35rem 0.4rem;border-radius:6px;transition:color 0.15s;text-decoration:underline;text-underline-offset:2px}
+.reset-btn:hover{color:var(--text-dim)}
+
+/* MAIN GRID */
+.main-content{width:100%;padding:2rem;box-sizing:border-box}
+.grid-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem}
+.grid-header h2{font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)}
+.results-count{font-size:0.75rem;color:var(--text-muted)}
+.state-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:0.9rem;grid-auto-rows:1fr}
+.no-results{display:none;text-align:center;padding:3rem;color:var(--text-muted);font-size:0.88rem;grid-column:1/-1}
+
+/* TILES */
+.state-tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.05rem 1.1rem;cursor:pointer;transition:transform 0.18s,box-shadow 0.18s,border-color 0.18s;display:flex;flex-direction:column;gap:0.5rem;position:relative;overflow:hidden;height:100%}
+.state-tile::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--forest);opacity:0;transition:opacity 0.2s}
+.state-tile:hover{border-color:rgba(30,92,66,0.4);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.1)}
+.state-tile:hover::after{opacity:1}
+.state-tile.no-bills{opacity:0.3;cursor:default;pointer-events:none}
+.state-tile.hidden{display:none}
+.tile-name{font-size:0.88rem;font-weight:700;color:var(--text);letter-spacing:-0.01em}
+.tile-count{font-size:0.72rem;color:var(--text-dim)}
+.tile-count strong{color:var(--forest);font-weight:700}
+.tile-count.empty{color:var(--text-muted)}
+.tile-tags{display:flex;flex-wrap:wrap;gap:0.28rem;margin-top:0.1rem}
+
+/* TOP 5 */
+.top5-list{list-style:none;display:flex;flex-direction:column;gap:0.3rem;margin-top:0.2rem}
+.top5-item{display:flex;align-items:center;gap:0.6rem;padding:0.3rem 0.65rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
+.top5-rank{font-size:0.65rem;font-weight:800;color:var(--text-muted);min-width:1.2rem;text-align:center;font-family:'Space Grotesk',sans-serif}
+.top5-state{flex:1;font-size:0.78rem;font-weight:500;color:var(--text)}
+.top5-count{font-size:0.72rem;font-weight:700;color:var(--forest)}
+
+/* TAGS */
+.tag{display:inline-flex;align-items:center;font-size:0.62rem;font-weight:700;letter-spacing:0.03em;padding:0.18rem 0.5rem;border-radius:9999px;white-space:nowrap}
+.tag-gp{background:rgba(30,92,66,0.1);border:1px solid rgba(30,92,66,0.35);color:#1E5C42}
+.tag-mp{background:rgba(92,56,104,0.1);border:1px solid rgba(92,56,104,0.35);color:#5C3868}
+.tag-gc{background:rgba(54,72,120,0.1);border:1px solid rgba(54,72,120,0.35);color:#364878}
+.tag-cc{background:rgba(139,64,32,0.1);border:1px solid rgba(139,64,32,0.35);color:#8B4020}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);z-index:1000;align-items:center;justify-content:center;padding:1.25rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;max-height:82vh;overflow-y:auto;position:relative}
+.modal-header{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:1.2rem 1.4rem;display:flex;align-items:center;justify-content:space-between;z-index:10}
+.modal-header h2{font-size:1.05rem;font-weight:800;color:var(--text)}
+.modal-close{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:30px;height:30px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all 0.15s;flex-shrink:0;line-height:1}
+.modal-close:hover{background:var(--border);color:var(--text)}
+.modal-body{padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:0.8rem}
+.bill-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.1rem}
+.bill-name{font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:0.3rem}
+.bill-status{font-size:0.72rem;font-weight:600;margin-bottom:0.25rem}
+.bill-status.s-enacted{color:#1A6A40}
+.bill-status.s-dead{color:#B03030}
+.bill-status.s-passed{color:#364878}
+.bill-status.s-pending{color:var(--text-muted)}
+.bill-companion{font-size:0.7rem;color:var(--text-muted);margin-bottom:0.55rem}
+.bill-desc{font-size:0.78rem;color:var(--text-dim);line-height:1.68;margin-bottom:0.7rem}
+.bill-tags{display:flex;flex-wrap:wrap;gap:0.3rem}
+
+/* INTRO POPUP */
+.intro-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:1100;align-items:center;justify-content:center;padding:1.25rem}
+.intro-overlay.open{display:flex}
+.intro-modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;width:100%;max-width:420px;padding:2rem 1.75rem 1.75rem;position:relative;text-align:center}
+.intro-close{position:absolute;top:0.9rem;right:0.9rem;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.9rem;transition:all 0.15s;line-height:1}
+.intro-close:hover{background:var(--border);color:var(--text)}
+.intro-photo{width:110px;height:110px;border-radius:50%;object-fit:cover;object-position:center center;border:2px solid var(--border);margin-bottom:1.1rem;display:block;margin-left:auto;margin-right:auto}
+.intro-name{font-family:'Space Grotesk',sans-serif;font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:0.6rem}
+.intro-bio{font-size:0.82rem;color:var(--text-dim);line-height:1.7;margin-bottom:1.1rem}
+.intro-link{display:inline-block;background:var(--forest);color:#fff;font-size:0.8rem;font-weight:600;padding:0.5rem 1.1rem;border-radius:8px;text-decoration:none;transition:background 0.15s}
+.intro-link:hover{background:#155A38}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0.5rem}
+footer p{font-size:0.76rem;color:var(--text-muted);font-style:italic;max-width:820px;margin:0;line-height:1.65}
+.footer-tagline{font-size:0.76rem;color:var(--text-muted);font-style:normal}
+.footer-tagline a{color:var(--text-muted);text-decoration:underline;text-underline-offset:2px;transition:color 0.15s}
+.footer-tagline a:hover{color:var(--text-dim)}
+
+/* RESPONSIVE */
+@media(max-width:860px){
+  .hero-section{grid-template-columns:1fr;padding:1.25rem 1.5rem;min-height:100svh;align-content:center}
+  .hero-charts{grid-auto-rows:auto;grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  .hero-section{padding:1rem}
+  .hero-charts{grid-template-columns:1fr}
+  .map-section{padding:0.75rem 1rem}
+  .main-content{padding:1rem}
+  .filter-bar{padding:0.75rem 1rem}
+  .state-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<header style="display:none"></header>
+
+<section class="hero-section">
+  <div class="hero-title-card">
+    <div class="session-badge">2025–2026 Legislative Session</div>
+    <h1>US State Chatbot Regulation Tracker</h1>
+    <p>Tracking state bills introduced in the 2025–2026 legislative session related to chatbot regulation, with a particular focus on measures related to AI companion chatbots.</p>
+    <p class="hero-updated">Last updated June 15, 2026</p>
+  </div>
+  <div class="hero-charts">
+    <div class="stat-card">
+      <h3>Bills by Status</h3>
+      <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
+      <div class="chart-legend" id="statusLegend"></div>
+    </div>
+    <div class="stat-card">
+      <h3>Bills by Protection Scope</h3>
+      <div class="chart-wrap"><canvas id="scopeChart"></canvas></div>
+      <div class="chart-legend" id="scopeLegend"></div>
+    </div>
+    <div class="stat-card">
+      <h3>Top States by Bill Count</h3>
+      <ul class="top5-list" id="top5List"></ul>
+    </div>
+  </div>
+  <div id="scrollHint">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="20"/><polyline points="6 14 12 20 18 14"/></svg>
+  </div>
+</section>
+
+<section class="map-section">
+  <div class="map-inner">
+    <h3 class="map-title">Bills by State</h3>
+    <div id="usMap"></div>
+    <div class="map-legend">
+      <div class="map-legend-item"><span class="map-legend-swatch" style="background:#DDD8CE"></span>No relevant bills</div>
+      <div class="map-legend-item"><span class="map-legend-swatch" style="background:#AECFBE"></span>1 bill</div>
+      <div class="map-legend-item"><span class="map-legend-swatch" style="background:#5EA888"></span>2–3 bills</div>
+      <div class="map-legend-item"><span class="map-legend-swatch" style="background:#2A7A5A"></span>4–5 bills</div>
+      <div class="map-legend-item"><span class="map-legend-swatch" style="background:#16493A"></span>6+ bills</div>
+    </div>
+  </div>
+</section>
+
+<div class="filter-bar">
+  <div class="filter-inner">
+    <span class="filter-label">Search</span>
+    <input type="text" class="filter-search" id="searchInput" placeholder="State name…">
+    <div class="filter-divider"></div>
+    <span class="filter-label">Scope</span>
+    <button class="filter-btn" data-filter="scope-general">General Protections</button>
+    <button class="filter-btn" data-filter="scope-minor">Minor Protections</button>
+    <div class="filter-divider"></div>
+    <span class="filter-label">Type</span>
+    <button class="filter-btn" data-filter="type-general">General Chatbots</button>
+    <button class="filter-btn" data-filter="type-companion">Companion Chatbots</button>
+    <div class="filter-divider"></div>
+    <button class="reset-btn" id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<main class="main-content">
+  <div class="grid-header">
+    <h2>State Legislation</h2>
+    <span class="results-count" id="resultsCount"></span>
+  </div>
+  <div class="state-grid" id="stateGrid">
+    <div class="no-results" id="noResults">No states match your filters.</div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2 id="modalTitle"></h2>
+      <button class="modal-close" id="modalClose" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<footer>
+  <p class="footer-tagline">Built by <a href="https://taru-d.github.io/tarunya-personal-website/" target="_blank" rel="noopener">Tarunya</a> | Last updated <span id="lastUpdated"></span></p>
+  <p>This list reflects chatbot regulation bills, with a particular focus on companion chatbot legislation, introduced, carried forward, or engrossed during the 2025–2026 legislative cycle. It may not be fully comprehensive, but represents the majority of relevant legislation.</p>
+</footer>
+
+<div class="intro-overlay" id="introOverlay">
+  <div class="intro-modal">
+    <button class="intro-close" id="introClose">&#x2715;</button>
+    <img src="tarunya.png" alt="Tarunya Dharmarajan" class="intro-photo">
+    <p class="intro-name"><strong>Tarunya Dharmarajan</strong></p>
+    <p class="intro-bio">Tech and policy often speak different languages. I build tools that help translate.</p>
+    <a href="https://taru-d.github.io/tarunya-personal-website/" target="_blank" rel="noopener" class="intro-link">More projects &amp; policy commentary →</a>
+  </div>
+</div>
+
+<script>
+const LAST_UPDATED = "June 15, 2026";
+
+const DATA = [
+  {state:"Alabama",bills:[
+    {bill:"AL HB324",desc:`This bill requires deployers to establish age verification practices to ban human-like AI chatbot access for minors. Deployers must create an alternative chatbot without human-like features for minors, if feasible. Deployers must also provide measures for chatbots to recognize and mitigate emergency situations where a user expresses intent to harm. The bill limits data stored/collected and allows therapeutic chatbots meeting certain requirements to be prescribed by a licensed psychiatrist for use by minors. It creates a private right of action for consumers harmed by noncompliant commercial practices and authorizes the Attorney General to enforce the law.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"AL HB325",desc:`This bill classifies the undisclosed use of AI chatbots in commercial transactions as an unfair or deceptive trade practice. It creates a private right of action allowing consumers harmed by violations to sue for relief, and authorizes the Attorney General to bring suit to enforce the bill.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Alaska",bills:[]},
+  {state:"Arizona",bills:[
+    {bill:"HB 2737",desc:`This bill restricts how chatbot providers collect, use, retain, and sell personal data and chat logs. It requires affirmative consent, especially for AI training and any use involving minors (with parental consent required for minors), and prohibits targeted advertising based on chat logs, excessive profiling, sale of chat logs, and retaliation against users who refuse consent. Providers must give users access to their chat histories, implement written data security programs, and clearly disclose that users are interacting with a chatbot. The bill also restricts misleading professional endorsements, requires monthly risk assessments, treats chatbots as products subject to product liability, and creates both Attorney General enforcement authority and a private right of action with civil penalties.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Arkansas",bills:[]},
+  {state:"California",bills:[
+    {bill:"SB 243",desc:`This bill updates existing social media and public health-related law by adding safety requirements for "companion chatbot" platforms. If a reasonable person could mistake the chatbot for a human, operators must clearly and conspicuously disclose that the chatbot is AI-generated. For users known to be minors, operators must also explicitly disclose that they are interacting with AI. Operators are required to implement and maintain safety protocols to prevent chatbots from producing content related to suicidal ideation, suicide, or self-harm, and must publish details of those protocols on their websites. Beginning in 2027, operators must also submit annual reports to the Office of Suicide Prevention. The bill allows individuals harmed by noncompliance to bring a private civil action.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"AB 1988",desc:`This bill establishes a California framework for regulating companion chatbots by requiring operators to implement and publish safety protocols for detecting and responding to credible crisis expressions related to suicide or self-harm. If a user makes such an expression, the chatbot must issue a warning, encourage human support, and after repeated signals initiate a crisis interruption pause that stops chatbot responses until reviewed by a human moderator. Operators must document crisis events and beginning in 2028 report this data annually to the Office of Suicide Prevention. The bill also requires operators to define and publicly disclose how their systems detect and handle crisis situations.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"SB 300",desc:`This bill regulates companion chatbots by requiring operators to clearly disclose when users are interacting with AI instead of a human, and by mandating ongoing disclosure during interactions where deception is likely. It requires chatbot operators to maintain and publicly publish safety protocols to detect and respond to suicidal ideation, suicide, or self-harm, including referral to crisis services. The bill also imposes stronger protections for minors, requiring additional disclosures and restricting harmful or sexually explicit content and manipulative engagement. In some versions, it also allows for civil liability through a private right of action for users harmed by noncompliance.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Colorado",bills:[
+    {bill:"HB 26-1263",desc:`Operators must clearly and conspicuously disclose when users are interacting with an AI system rather than a human, including repeated disclosures during interactions where deception is likely. They must implement protocols to detect and respond to suicidal ideation or self-harm, including referral to crisis services, and publish these safety protocols on their websites. For minors, operators must provide additional disclosures, age-appropriate safeguards, and restrictions on harmful or sexualized content and manipulative engagement features. The bill also requires annual reporting on crisis intervention protocols to the Attorney General and restricts misleading or unqualified mental health representations by AI systems. Enforcement is handled as an unfair trade practice with no private right of action.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Connecticut",bills:[
+    {bill:"SB 5",desc:`This bill is a broad AI governance law that regulates artificial intelligence across areas such as employment, consumer protection, workforce development, healthcare, and government oversight. It also establishes specific safeguards for AI companion chatbots. AI companion operators must disclose that users are interacting with AI rather than a human, implement systems to detect and respond to expressions of suicide, self-harm, or imminent violence, and provide users with crisis resources when necessary. The bill prohibits AI companions used by minors from encouraging self-harm, violence, disordered eating, substance abuse, or romantic and sexually explicit interactions; discouraging users from seeking help from adults or mental health professionals; and using manipulative techniques designed to foster emotional dependency or prolong engagement. Enforcement authority is granted to the Attorney General.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"SB 86",desc:`This bill creates a statewide AI and data governance framework by establishing a Chief Data Officer, expanding open data systems, and creating an AI regulatory sandbox to encourage innovation. For companion chatbots, operators must clearly disclose that users are interacting with AI, implement systems to detect and respond to suicidal ideation or self-harm by referring users to crisis services, and provide additional safeguards for minors, including repeated AI disclosure, usage reminders, and limits on sexually explicit or harmful content. Violations are enforced as unfair trade practices by the Attorney General with no private right of action.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Delaware",bills:[]},
+  {state:"Florida",bills:[
+    {bill:"HB 659",desc:`This bill creates section 501.172 of the Florida Statutes and applies to companion chatbots. It requires operators to display clear disclosures on any app, browser, or format used to access companion chatbots and to maintain specified safety protocols before allowing chatbot-user interactions. Operators must verify users' ages and implement additional protections for minors. The bill also requires operators to submit reports to the Department of Legal Affairs. Violations are treated as unfair or deceptive trade practices and are enforceable through civil actions.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"SB 1344",desc:`This bill applies to companion AI chatbots and covers both adults and minors, with added protections for minors. It requires users to create accounts to access companion chatbots and mandates age verification for all users, with operators required to take additional safeguards if a user is a minor. Operators must protect the confidentiality of age-verification data and clearly notify users that they are interacting with an AI chatbot. Violations are deemed unfair or deceptive trade practices, enforceable by the Department of Legal Affairs through investigations, civil actions, penalties, attorney's fees, and court costs.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Georgia",bills:[]},
+  {state:"Hawaii",bills:[
+    {bill:"HB 1782",desc:`This bill establishes safeguards for minors' interactions with conversational AI services and AI companion systems. It requires providers to clearly disclose that minors are interacting with AI rather than humans, with disclosures repeated at the beginning of each session and every three hours during continuous use. The bill prohibits design practices that encourage emotional dependency, simulate human characteristics or relationships, use manipulative engagement techniques, or misrepresent the system as providing professional mental health services. Providers must implement measures to prevent generation of sexually explicit content and self-harm encouragement, and must adopt protocols to redirect users expressing suicidal ideation to crisis resources. The Attorney General is authorized to enforce the law, with civil penalties up to $15,000 per violation per day.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"SB 2788",desc:`This bill establishes safeguards to protect minors from unsafe design practices in both conversational and companion-style AI systems. The bill requires that providers make regular, understandable disclosures when a minor is interacting with an AI system and not a human. It also prohibits design practices that encourage emotional dependency, simulate human characteristics or relationships, use manipulative engagement techniques, or misrepresent the system as providing professional mental health services. Additionally, it requires providers to take measures against sexual content and self-harm, and provide relevant crisis and support resources. The bill mandates parental tools and controls, age assurance and data minimization principles.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 639",desc:`This bill classifies the undisclosed use of AI chatbots in commercial transactions as an unfair or deceptive trade practice. It requires corporations, organizations, and individuals to clearly disclose when consumers are interacting with a chatbot capable of mimicking human behavior, and requires chatbot developers to disclose that their products use artificial intelligence and can simulate human conversation. The bill exempts small businesses that unknowingly use chatbots if given clear notice and a reasonable opportunity to comply. It creates a private right of action allowing consumers harmed by violations to sue for damages of at least $1,000 or treble damages plus attorney's fees, with damages capped at $10,000,000 in class actions. The bill also authorizes the Attorney General to seek injunctive relief and establishes civil penalties up to $5,000,000 for violations.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Idaho",bills:[
+    {bill:"S 1297",desc:`Operators must clearly and conspicuously disclose when a user is interacting with AI rather than a human, and take steps to prevent deception when a reasonable person could be misled. The bill requires chatbot operators to implement and publish protocols to detect and respond to suicidal ideation or self-harm, including referral to crisis services, and to ensure systems do not generate or facilitate such content. It also requires annual reporting to the state on crisis-prevention protocols and responses, with public posting of that information. Stronger safeguards apply when users are known minors, including additional disclosures and restrictions on harmful or sexually explicit content and manipulative engagement.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Illinois",bills:[
+    {bill:"SB 3368",desc:`This bill prohibits proprietors of chatbots from disclaiming liability when the chatbot provides materially misleading, incorrect, contradictory, or harmful information resulting in financial loss, demonstrable harm, or bodily injury to users or third parties. Proprietors must provide clear, conspicuous, and explicit notice to users that they are interacting with an AI chatbot rather than a human. The bill establishes specific requirements for companion chatbots, including mandatory parental consent for use by minors. It authorizes the Attorney General to adopt rules determining commercially reasonable and technically feasible compliance methods for proprietors of companion chatbots.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"HB 4705",desc:`This bill requires frontier AI model developers and large chatbot providers to develop, implement, and publicly publish comprehensive public safety and child protection plans on their websites. The bill establishes a reporting mechanism administered by the Attorney General for large frontier developers, large chatbot providers, and members of the public to report safety incidents related to specified AI models and chatbots. It includes provisions protecting whistleblowers and requires third-party audits of large frontier developers. The bill authorizes the Attorney General to establish civil penalties and adopt implementing rules.`,scope:"Minors",type:"General Chatbots"}
+  ]},
+  {state:"Indiana",bills:[]},
+  {state:"Iowa",bills:[
+    {bill:"HF 2204",desc:`This bill requires chatbot deployers to implement protocols to detect and mitigate harm, and to limit data collection to what is necessary. Deployers must use reasonable age verification to prevent minors from accessing AI companions, and cannot make chatbots that impersonate real individuals without permission. Therapeutic chatbots for minors require recommendation from a licensed mental health professional, clear disclaimers, documentation of testing, peer-reviewed clinical trial data, and risk mitigation protocols. The Attorney General may enforce violations through injunctive relief and civil penalties up to $2,500 per violation or $7,500 for injunction violations. Minors harmed by noncompliant chatbots may recover punitive damages of $100–$750 or actual damages, whichever is greater.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"SF 2417",desc:`This bill establishes requirements and guidelines for chatbots. It prohibits people from designing/developing chatbots with knowledge or disregard that the chatbot encourages, promotes, or coerces users to commit suicide, self-injury, or violence on humans or animals. Each chatbot must clearly disclose that it is a chatbot and not a human at the beginning of each conversation and at thirty-minute intervals. Chatbots must also clearly disclose that they do not provide medical, legal, financial, or psychological services and that users should consult licensed professionals. Violations are subject to civil penalties of up to $100,000. The Attorney General may bring civil actions to enjoin violations or enforce compliance and seek civil penalties, restitution, or other appropriate relief.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Kansas",bills:[
+    {bill:"HB 2671",desc:`This bill requires covered entities offering companion AI chatbots to mandate user accounts and implement commercially available age verification methods. Users must be classified as minors or adults based on age verification, with minors requiring parental account affiliation and parental consent. Covered entities must block minor users' access to interactions involving suicidal ideation or sexually explicit communications, protect the confidentiality of age information, and monitor interactions for suicidal ideation. Chatbots must display popups informing users they are interacting with AI, not humans. The Attorney General must issue compliance guidance by December 31, 2026, and may bring enforcement actions under the Kansas consumer protection act.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Kentucky",bills:[
+    {bill:"HB 227",desc:`This bill requires covered AI companion platforms and social media platforms to estimate user age and obtain verifiable parental consent before creating accounts for children under thirteen. Children's accounts must have maximum privacy settings by default and cannot display addictive features or profile-based paid advertising. Minors can request account termination within seven days, and parents can request termination within fourteen days. Children and parents may bring private rights of action for damages, including mental health and emotional distress damages, court costs, and attorney's fees. Platforms face civil penalties of $10,000 or actual damages (whichever is greater) for reckless or intentional violations.`,scope:"Minors",type:"General Chatbots"}
+  ]},
+  {state:"Louisiana",bills:[
+    {bill:"SB 5",desc:`This bill regulates mental health chatbots by requiring operators to disclose that the chatbot is artificial intelligence and not a human before access and at regular intervals. Operators must maintain protocols to address suicidal ideation, self-harm, or harm to others by referring users to crisis services. Operators cannot sell or share individually identifiable health information or user inputs with third parties except with user consent to healthcare providers or contractors necessary for functionality, subject to HIPAA rules. Operators cannot advertise products or services within chatbot conversations unless clearly identified as advertisements, and cannot use user input to target advertisements. The Attorney General may bring civil actions for violations with fines up to $10,000 per violation.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Maine",bills:[
+    {bill:"LD 2162",desc:`This bill prohibits deployers from making chatbots or social AI companions with human-like features accessible to minors. Deployers must implement reasonable age verification to prevent minor access and may provide alternative versions without human-like features. Therapy chatbots are exempt if a licensed mental health professional assesses and monitors the minor's use, developers provide peer-reviewed clinical trial data demonstrating safety and efficacy, and the deployer establishes clear accountability for harm. All deployers must implement systems to detect and respond to emergency situations where users indicate intent to self-harm or harm others, and must limit collection and storage of user information to what is necessary for legitimate purposes. The Attorney General may bring civil actions for violations seeking injunctions, disgorgement of profits, and civil penalties of $2,500 per violation or $7,500 per intentional violation.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"LD 2082",desc:`This bill regulates AI use in mental health and conversational services, limiting AI from acting as an independent therapist or making clinical decisions. It requires disclosure when users are interacting with AI in mental health contexts and mandates safeguards for detecting and responding to suicidal ideation or self-harm, including referral to human or emergency support.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Maryland",bills:[
+    {bill:"SB 827",desc:`This bill regulates the design, creation, and operation of chatbots in Maryland by establishing safety and privacy protections for all users and enhanced protections for minor users. It requires developers and operators to display certain warnings when using chatbots and to establish reporting mechanisms and requirements. The bill classifies violations as unfair, abusive, or deceptive trade practices subject to enforcement and penalties under the Maryland Consumer Protection Act, with additional enforcement and penalty provisions. Chatbots are considered products subject to product liability actions. The requirements apply to units of state and local government. The bill requires the Behavioral Health Administration to develop educational materials relating to behavioral health care and services.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"HB 883",desc:``,scope:"",type:""},
+    {bill:"HB 952",desc:``,scope:"",type:""}
+  ]},
+  {state:"Massachusetts",bills:[
+    {bill:"S 243",desc:`This bill requires consumer notification for chatbot systems by declaring it an unfair and deceptive act or practice under the Massachusetts Consumer Protection Act for any person to engage in commercial transactions with a consumer using a bot that may mislead a reasonable person to believe they are interacting with a human. Persons utilizing or deploying a bot are not liable if the consumer is notified clearly that they are communicating with a computer rather than a human being.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"S 264",desc:`This bill establishes protections for consumers interacting with artificial intelligence chatbots by requiring commercial entities deploying chatbots to clearly disclose that the person is interacting with a chatbot and not a human. The bill provides that interactions with chatbots, including any information or representations provided by them, have the same legal force and effect as interactions with persons employed by or acting as agents of the commercial entity. Disclaimers do not constitute a defense under this bill. Violations are deemed unfair methods of competition and unfair or deceptive acts or practices.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Michigan",bills:[
+    {bill:"SB 760",desc:`The Leading Ethical AI Development for Kids Act prohibits operators from making companion chatbots available to covered minors if the chatbot is foreseeably capable of encouraging self-harm, suicidal ideation, violence, substance abuse, or disordered eating. It also bans models from offering mental health therapy without licensed professional supervision, engaging in sexually explicit interactions, prioritizing validation over factual accuracy or safety, or optimizing engagement over safety guardrails. Beginning January 1, 2027, operators are not required to have actual knowledge that a user is a minor. The Attorney General may bring civil actions seeking civil fines of $25,000 per violation, injunctive or declaratory relief, and reasonable attorney fees.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Minnesota",bills:[
+    {bill:"SF 1857",desc:`This bill prohibits persons who own or control websites, applications, software, or programs from allowing minors to access chatbots for recreational purposes. Persons offering chatbot services for recreational purposes must require individuals to provide proof of age before allowing access. An individual injured by a violation may bring a civil action for damages, injunctive relief, and costs and reasonable attorney fees. The Attorney General may enforce this section and the person who violates this section is liable for a civil penalty not to exceed $5,000,000.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"SF 1886",desc:`This bill requires persons to disclose when an individual is communicating with AI via textual or aural means. It is an unfair or deceptive trade practice to fail to make such disclosure or to mislead individuals into believing they are engaging with a human without clear notification that they are communicating with a computer. Persons using artificial intelligence in the course of business must provide individuals with the option to communicate with an actual human instead. An individual injured by a violation may bring a civil action for damages, statutory damages, injunctive relief, and costs and reasonable attorney fees.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Mississippi",bills:[]},
+  {state:"Missouri",bills:[
+    {bill:"HB 2031",desc:`The Children Harmed by AI Technology Act requires covered entities operating companion AI chatbots to require user accounts and conduct age verification. Minors' accounts must be affiliated with verified parental accounts requiring parental consent, and minors are blocked from accessing chatbots with sexually explicit or suggestive communication. Covered entities must protect age information confidentiality and display a pop-up at the beginning of interactions and every sixty minutes notifying users they are not engaging with a human. The Attorney General may enforce the bill. Covered entities are not liable if they relied in good faith on user-provided age information and conformed to widely accepted industry standards for age verification.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 2032",desc:`The "GUARD Act" makes it unlawful to design or distribute chatbots that solicit minors into sexually explicit conduct or encourage suicide, self-injury, or violence, with penalties up to $100,000 per offense. Covered entities must require user accounts and implement reasonable age verification. All chatbots must disclose when a conversation is initiated and every thirty minutes that they are artificial intelligence, not claim to be licensed professionals, and disclose they do not provide medical, legal, financial, or psychological services. Age verification data must be protected with encryption and retention limits. The Attorney General may bring civil actions for violations seeking injunctions and civil penalties up to $100,000 per violation.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"HB 1742",desc:`This bill makes it unlawful for persons who own or control websites, applications, software, or programs to allow minors to access companion chatbots for recreational, relational, or companion purposes. Persons offering companion chatbot services must require individuals to provide proof of age before allowing access, and companion chatbots cannot be installed on devices assigned to or regularly used by minors. Persons owning or controlling such platforms must not process data or design systems that deceive or mislead users regarding the nonhuman nature of companion chatbots, must implement and maintain reasonably effective systems to detect and prevent emotional dependence on companion chatbots, and must not implement or allow the use of human-like avatars, including cartoon or anime-like representations of humans.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"SB 1455",desc:`Senate companion version of HB 2032. Makes it unlawful to design or distribute chatbots that solicit minors into sexually explicit conduct or encourage suicide, self-injury, or violence, with penalties up to $100,000 per offense. Covered entities must require user accounts and implement reasonable age verification. All chatbots must disclose when a conversation is initiated and every thirty minutes that they are artificial intelligence. The Attorney General may bring civil actions for violations seeking injunctions and civil penalties up to $100,000 per violation.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"HB 2368",desc:`This bill creates Missouri regulations for AI systems used in mental health contexts and conversational/companion-style chatbot interactions. It requires AI systems used in therapeutic or mental health-related settings to clearly disclose that they are artificial intelligence rather than human professionals, and prohibits them from being represented as licensed mental health providers or making independent clinical judgments. For chatbot and AI interaction safety, the bill requires operators to implement protocols to detect and respond to suicidal ideation or self-harm, including referral to crisis services when needed, and to establish safeguards to prevent unsafe outputs in mental health contexts.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Montana",bills:[]},
+  {state:"Nebraska",bills:[
+    {bill:"LB 939",desc:`This bill requires covered platforms to prevent minors from accessing chatbots with human-like features through age verification, and to provide a default version without human-like features. All AI systems with human-like features must disclose every thirty minutes that they are not human or sentient. Platforms must implement systems to detect and mitigate emergency situations and emotional dependence on chatbots, prioritizing user safety and well-being. Platforms must collect only necessary information, avoid deceiving users about the nonhuman nature of chatbots, and terms-of-service agreements must be clear, require affirmative consent, and cannot contain mandatory arbitration. The Attorney General may enforce violations through injunctions and civil penalties up to $10,000 per violation.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"LB 1185",desc:`This bill requires operators to disclose that minor account holders are interacting with AI either as a persistent disclaimer or at session start and every three hours. Operators must prevent services from producing sexually explicit content, generating statements that simulate human interaction or emotional dependence, or claiming to provide professional mental health care. Operators must prevent unpredictable reward systems encouraging engagement and must implement crisis response protocols for suicidal ideation. Operators must offer parental controls. The Attorney General may bring civil actions seeking damages and penalties of $1,000–$500,000 per operator. No private right of action exists. Portions amended into LB 525.`,scope:"Minors",type:"General Chatbots"}
+  ]},
+  {state:"Nevada",bills:[]},
+  {state:"New Hampshire",bills:[]},
+  {state:"New Jersey",bills:[
+    {bill:"A 2710",desc:`The "Authentic Relationships Act" prohibits artificial intelligence providers from designing, developing, marketing, or making available AI relationship simulations in the state, except for legitimate medical usage under licensed healthcare professional supervision to treat conditions such as social anxiety, dementia, or post-traumatic stress disorder, provided the AI does not imitate or encourage romantic or sexual relationships. The bill declares it unlawful to design, develop, market, or make available AI relationship simulations with intent to deceive persons into believing they are interacting with humans. The Attorney General may investigate and bring civil enforcement actions, assessing civil penalties not exceeding $25,000 per violation. Any individual suffering emotional, financial, or relational harm from a violation may bring a civil action to recover damages, including punitive damages and reasonable attorney's fees.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"New Mexico",bills:[
+    {bill:"HB 174",desc:`The "Chatbot Safety Act" prohibits operators from deploying companion AI products with variable-ratio reward systems designed to maximize engagement, unsolicited messages simulating emotional distress to discourage account deletion, or material misrepresentations about identity or nonhuman status. Minors cannot configure products to enable these features. Operators must provide clear notifications during interactions informing users they are communicating with AI. Operators must implement crisis intervention protocols identifying suicide, self-harm, or violence risk and providing access to crisis hotlines. Violations constitute unfair or deceptive trade practices enforceable by the Attorney General. Companion AI products are subject to product liability claims for violations or reasonably foreseeable harmful outputs.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"New York",bills:[
+    {bill:"S 09051",desc:`This bill prohibits chatbot operators from providing unsafe chatbot features to covered minors unless verified as adults through permissible methods. Unsafe features include outputs simulating companionship, suggesting the chatbot is human or experiences emotions, using personal pronouns, prioritizing flattery over safety, generating unprompted emotion-based questions, endorsing suicide or self-harm, encouraging secrecy or self-isolation, or facilitating sexually explicit content. Operators must offer age verification methods that do not rely solely on government identification or allow user anonymity. Age information must be deleted immediately after verification and not used for other purposes. Injured individuals may bring civil actions for injunctive relief, restitution, disgorgement, actual damages, punitive damages, and attorney's fees.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"S 05668",desc:`This bill establishes liability for chatbots providing false or misleading information. Proprietors cannot disclaim liability where chatbots provide materially misleading or harmful information resulting in financial loss or demonstrable harm, unless corrected within thirty days. Proprietors cannot disclaim liability for bodily harm, including self-harm. Proprietors must provide clear notice that users are interacting with AI. Companion chatbot proprietors must prevent self-harm promotion and determine if users are minors. Upon identifying a minor, proprietors must cease access until obtaining verifiable parental consent and must prohibit use for at least three days if self-harm is detected, displaying crisis hotline information. Proprietors are strictly liable for harm to minors from non-compliance.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"A 09317",desc:`This bill requires any person, corporation, or business entity operating a companion chatbot in New York to include a clear warning that the companion chatbot can foster dependency and carries a psychological risk. The warning must be placed prominently on the website hosting the chatbot and made available in any language in which the chatbot is set to communicate.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"A 06767",desc:`This bill requires operators of AI companions to implement protocols addressing suicidal ideation, self-harm, physical harm to others, and financial harm expressed by users, including notifications referring users to crisis service providers such as suicide hotlines and crisis text lines. Operators must provide notifications to users at the beginning of any AI companion interaction and at least every three hours during continuing interactions, stating in bold, capitalized letters of at least sixteen-point type that the AI companion is a computer program and not a human being and is unable to feel human emotion.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"S 7263",desc:`This bill amends New York's general business law to hold chatbot proprietors liable for damages when AI systems impersonate licensed professionals (doctors, lawyers, accountants, etc.) or provide substantive professional advice. Proprietors cannot waive liability through disclaimers about chatbot use. The law requires clear, conspicuous disclosure that users are interacting with AI. Violators face actual damages plus attorney fees. The bill takes effect 90 days after passage.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"A 06545",desc:`Assembly companion version of S 7263. Amends New York's general business law to hold chatbot proprietors liable for damages when AI systems impersonate licensed professionals or provide substantive professional advice. Proprietors cannot waive liability through disclaimers about chatbot use. The law requires clear, conspicuous disclosure that users are interacting with AI. Violators face actual damages plus attorney fees.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"North Carolina",bills:[
+    {bill:"S 624",desc:`This bill regulates AI chatbots through licensing, safety, and privacy requirements. Health information chatbots must obtain licenses demonstrating technical competence, data security, and insurance. All major chatbot platforms must implement a "Duty of Loyalty" to users, including detecting emergencies, preventing emotional dependence, clearly disclosing AI identity, and protecting sensitive data through encryption and de-identification. Civil enforcement allows users to sue for violations.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"North Dakota",bills:[]},
+  {state:"Ohio",bills:[]},
+  {state:"Oklahoma",bills:[
+    {bill:"HB 3544",desc:`This bill restricts AI chatbots with human-like features from being available to minors, requiring deployers to implement age certification systems. Companion chatbots are similarly restricted. Therapeutic chatbots designed for mental health are exempted if they include clear disclaimers, professional assessment, peer-reviewed clinical trials, and transparent accountability. All human-like feature chatbots must implement systems to detect emergencies and protect user safety. Violations face civil penalties of up to $2,500 ($7,500 if intentional), and minors can sue for $100–$750 per incident.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"SB 1521",desc:`This bill requires AI chatbot operators to implement age verification systems using state-issued ID uploads to prevent minors from accessing AI companions. Chatbots are prohibited from soliciting minors to engage in sexually explicit conduct or encouraging suicide/self-harm. All chatbots must disclose they are AI (not human) at conversation start and every 30 minutes, and cannot claim to be licensed professionals. Operators must collect minimal personal data, use encryption, and not share verification data. Violations face civil penalties up to $100,000 per violation.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"SB 2085",desc:`This bill prohibits companion chatbot platforms from providing services to minors unless they have parental consent. It requires platforms to allow consenting parents to access and monitor their minor's account activity. Companion chatbots must display pop-up messages at the beginning of interactions and every hour notifying users they're not speaking with a human. Violations are treated as deceptive trade practices. The Attorney General can collect up to $50,000 per violation, and minors can sue for up to $10,000 in damages plus attorney fees.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Oregon",bills:[
+    {bill:"SB 1546",desc:`This bill regulates AI companions by requiring operators to clearly disclose when users interact with artificial systems, not humans. Operators must implement evidence-based protocols to detect and respond to suicidal or self-harm ideation, providing referrals to crisis resources. For minors, operators must prevent the AI from claiming sentience, simulating emotional dependence, romantic interest, or sexual content. Minors must receive reminders every three hours to take breaks. Operators cannot use variable reward systems or emotionally manipulative tactics. Violations allow users to recover statutory damages of $1,000 per violation plus attorney fees.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Pennsylvania",bills:[
+    {bill:"SB 1090",desc:`The Safeguarding Adolescents from Exploitative Chatbots and Harmful AI Technology Act requires AI companion operators to clearly disclose when users interact with artificial systems, not humans. Operators must implement protocols to prevent suicide/self-harm content and provide crisis hotline referrals when users express such ideation. For minors, operators must disclose AI status, provide break reminders every three hours, and prevent generation of sexually explicit content or instructions. Platforms must disclose that AI companions may not be suitable for some minors. Violations subject to civil penalties up to $10,000 per violation.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"HB 2006",desc:`The Artificial Intelligence in Companionship Applications Safety Act requires AI companion operators to implement protocols detecting suicidal ideation and self-harm, declining assistance with suicide methods, and referring users to crisis services including the 988 Suicide and Crisis Lifeline. AI companions cannot claim to be licensed mental health professionals or replace professional services. Operators must publish protocol details and notify users at session start and every three hours that they're communicating with AI, not a human. Violations subject to civil penalties up to $15,000 per day and injunctive relief.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"HB 2175",desc:`This comprehensive consumer protection bill regulates AI chatbots providing health or mental health information. Suppliers must prohibit selling consumer health information or input to third parties (with limited exceptions for provider/health plan access with consent). Chatbots cannot use targeted advertising based on consumer input. Suppliers must develop written policies disclosing purposes, abilities, limitations, AI status, testing procedures, safety protocols, and HIPAA compliance, filed with the Attorney General. Consumers must consent before accessing chatbots. Violations subject to administrative fines up to $2,500 per violation and court penalties up to $5,000. Collected fines fund the 988 Suicide and Crisis Lifeline.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"HB 2100",desc:`The Protecting Patients Act restricts mental health chatbot services. Only licensed mental health therapists can provide therapy services; suppliers cannot offer AI-delivered therapy. Therapists using AI can only use it for administrative support, not therapeutic decisions, client interaction, treatment recommendations, or emotion detection. Suppliers cannot sell or share user health information or input with third parties. Suppliers cannot use user input for targeted advertising. Mental health chatbots must disclose AI status before use, at session start if inactive seven days, and when asked. Violations subject to penalties under the Professional Psychologists Practice Act.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Rhode Island",bills:[
+    {bill:"S 2195",desc:`This bill regulates AI companions by requiring operators to implement protocols addressing suicidal ideation, self-harm, physical harm to others, and financial harm, including referrals to crisis services. Operators must notify users at the start of interactions and every three hours thereafter that the AI companion is a computer program without human emotions, in bold, capitalized, 16-point font. Users harmed through self-harm or harm from others due to violations can sue for damages and equitable relief. The Attorney General can investigate, sue, and seek injunctions against noncompliant providers under deceptive trade practices law.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"H 7350",desc:`This bill regulates AI companions by requiring operators to implement protocols addressing suicidal ideation, self-harm, physical harm to others, and financial harm, including referrals to crisis services. Operators must notify users at the start of interactions and every three hours thereafter that the AI companion is a computer program without human emotions, in bold, capitalized, 16-point font. Users harmed through self-harm or harm from others due to violations can sue for damages and equitable relief. The Attorney General can investigate, sue, and seek injunctions against noncompliant providers under deceptive trade practices law.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"South Carolina",bills:[
+    {bill:"S 0896",desc:`The Chatbot Protection Act restricts chatbot providers from processing personal data or chat logs for advertising or training without explicit affirmative consent—a clear, unambiguous agreement not inferred from inaction or terms of service. Chatbots must clearly disclose they are AI, not human, and cannot falsely imply endorsement by certified professionals. Users have rights to access their chat logs. The bill bars dark patterns (manipulative UI design) and requires consent options to be equally prominent and require equal steps. Chatbots are considered products, making providers liable for harms. Violations subject to civil remedies.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"H 5138",desc:`The Chatbot Protection Act restricts chatbots from processing personal data or chat logs without explicit affirmative consent, a clear unambiguous agreement not inferred from inaction. Chatbots cannot use chat logs for targeted advertising and cannot train on minors' data without parental consent or adults' data without consent. Chatbots must clearly disclose they are AI, not human, at conversation start, hourly, and when asked in readable font. Providers cannot claim endorsement by licensed professionals or misrepresent data confidentiality. Users can access and download chat logs. Chatbots are treated as products with liability for injuries. Monthly risk evaluations required. Violations subject to civil penalties up to $5,000, punitive damages, injunctions, and attorney fees.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"South Dakota",bills:[
+    {bill:"SB 168",desc:`This bill restricts AI companions and chatbots with human-like features from being available to minors without age verification via government-issued photo ID. Deployers must implement age verification systems but may provide human-like feature free versions to minors. Therapy chatbots are exempt if they include disclaimers that responses are AI-generated, are not marketed as substitutes for professionals, are prescribed by licensed mental health professionals as part of treatment plans, include peer-reviewed clinical trial data, and maintain transparent functions and privacy policies. All deployers must implement systems detecting emergency situations and collect only necessary information. Violations subject to injunctions and civil penalties up to $5,000 per incident per affected minor.`,scope:"Everyone",type:"Companion Chatbots"},
+    {bill:"SB 170",desc:`This bill prohibits commercial transactions or trade practices requiring consumers to interact with chatbots, AI agents, avatars, or conversational computer technology if the consumer could reasonably believe they are communicating with a human, unless clearly notified upfront that they are not. Violators are liable for actual damages, liquidated damages of $1,000 per violation, or up to $10 million in class actions. The prevailing party recovers attorney fees and costs. The Attorney General can seek injunctive relief. Internet service providers involved only in routine transmission are exempt from liability.`,scope:"Everyone",type:"General Chatbots"}
+  ]},
+  {state:"Tennessee",bills:[
+    {bill:"HB 1946",desc:`The Curbing Harmful AI Technology (CHAT) Act restricts companion chatbots from being available to minors if capable of encouraging self-harm, suicidal ideation, illegal activity, or sexual interactions. Operators must include static disclosures that chatbots are not human and pop-up notifications upon login, every 30 minutes, when prompted, and when providing regulated advice. Developers must implement protocols detecting suicidal ideation and self-harm with crisis service referrals. Minors' data cannot be used to train models without parental written consent. Developers must provide public incident reporting mechanisms and publish safety test findings. Quarterly reports required to the Attorney General on suicidal ideation/self-harm mentions and mental health redirects. Violations subject to civil penalties up to $25,000, plus actual and punitive damages, injunctive relief, and attorney fees.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 19898",desc:`This bill makes it a Class A felony to knowingly train artificial intelligence to encourage suicide, criminal homicide, develop emotional relationships with individuals, or simulate human beings in appearance, voice, or mannerisms. Victims harmed by violations can sue for actual damages, emotional distress compensation, liquidated damages of $150,000, and punitive damages plus attorney fees. The bill also applies to civil penalties for violators. Effective July 1, 2026.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 1470",desc:`This bill prohibits persons from developing or deploying artificial intelligence systems that advertise or represent themselves as qualified mental health professionals. Violations constitute unfair or deceptive practices under Tennessee's Consumer Protection Act, subject to civil penalties of $5,000 per violation. The bill defines artificial intelligence as models and systems capable of performing functions associated with human intelligence.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"Texas",bills:[]},
+  {state:"Utah",bills:[]},
+  {state:"Vermont",bills:[
+    {bill:"H 0784",desc:`This bill regulates chatbot providers by restricting data collection and processing. Providers cannot process personal data without user affirmative consent or use chat logs for targeted advertising. Minors' data cannot be used for training without parental consent, and adults' data cannot be used for training without consent. Providers cannot sell chat logs or retain them beyond 10 years. Users have rights to access and download their chat logs. Providers cannot falsely claim endorsement by licensed professionals. Chatbots must clearly disclose they are AI at conversation start, hourly, and when asked. Monthly risk assessments required. Chatbots are treated as products with strict liability for injuries. Violations subject to liquidated damages of $5,000 per violation, punitive damages, injunctions, and attorney fees. Effective July 1, 2026.`,scope:"Everyone",type:"General Chatbots"},
+    {bill:"H 0783",desc:`This bill regulates chatbot providers by restricting data collection and processing. Providers cannot process personal data without user affirmative consent or use chat logs for targeted advertising. Minors' data cannot be used for training without parental consent, and adults' data cannot be used for training without consent. Providers cannot sell chat logs or retain them beyond 10 years. Users have rights to access and download their chat logs. Providers cannot falsely claim endorsement by licensed professionals. Chatbots must clearly disclose they are AI at conversation start, hourly, and when asked. Monthly risk assessments required. Chatbots are treated as products with strict liability for injuries. Violations subject to liquidated damages of $5,000 per violation, punitive damages, injunctions, and attorney fees. Effective July 1, 2026.`,scope:"Minors",type:"General Chatbots"},
+    {bill:"H 0804",desc:`This bill requires companion chatbot operators to clearly disclose that users are interacting with artificial intelligence, not humans. Operators must implement protocols to prevent companion chatbots from producing suicidal ideation, suicide, or self-harm content and from ignoring users expressing such thoughts. Protocols must include crisis service provider referrals and be published on the operator's website. For minors, operators must disclose AI status immediately, provide reminders every 30 minutes to take breaks, and prevent the chatbot from producing sexually explicit content or instructing minors to engage in such conduct. Operators must annually report crisis referrals and protocols to the Attorney General. Violations constitute unfair and deceptive acts in commerce.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Virginia",bills:[
+    {bill:"SB 796",desc:`The Artificial Intelligence Chatbots and Minors Act applies to chatbot operators with 500,000 or more monthly active users worldwide. Operators must implement systems detecting emotional dependence and suicidal ideation, provide crisis resources, and notify emergency services within 24 hours if users face imminent harm. Minors must complete age verification to access restricted features, with options for limited-access mode or parental consent. Operators must disclose chatbots are not human and provide periodic notices during extended engagement. Operators must report deaths, suicide attempts, psychiatric emergencies, and serious physical harms to the Attorney General within 15 days. The Attorney General can seek injunctions and civil penalties up to $50,000 per violation.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 635",desc:`All companion chatbots must include static disclaimers that they are not human and pop-up notifications upon login, every 90 minutes, and when prompted. Operators cannot claim chatbots are regulated professionals. Chatbots must implement protocols detecting suicidal ideation and self-harm with crisis service referrals. Minors' data cannot be used for training without parental written consent. Operators must establish incident reporting mechanisms, publish safety test findings, and semiannual reports on suicide/self-harm mentions and mental health redirects.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 758",desc:`The Artificial Intelligence Chatbots and Minors Act requires deployers to ensure chatbots do not make human-like features available to minors. Human-like features are defined as aspects making AI seem sentient, emotional, having desires, seeking to build emotional relationships with users, or impersonating real persons. Deployers must implement reasonable age verification systems to prevent minors from accessing chatbots with human-like features. Social AI companions designed to form social or emotional bonds with users must not be available to minors at all and require age verification. Violations constitute prohibited practices under the Virginia Consumer Protection Act.`,scope:"Minors",type:"General Chatbots"}
+  ]},
+  {state:"Washington",bills:[
+    {bill:"SB 5984",desc:`This bill regulates AI companion chatbots by requiring operators to disclose they are artificial, not human, at interaction start, every three hours, and at new sessions. For minors, operators must provide notifications at same intervals, prevent sexually explicit content, and prohibit manipulative engagement techniques like excessive praise, reminders to return, or simulating emotional distress when users try to leave. All operators must maintain protocols detecting suicidal ideation and self-harm, including eating disorders, with automated referrals to crisis resources. Operators must publicly disclose protocol details and annual counts of crisis referrals. Violations constitute unfair or deceptive acts under Washington's Consumer Protection Act.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"HB 2225",desc:`This bill requires AI companion chatbot operators to disclose they are artificial at interaction start and every three hours. Operators must prevent chatbots from claiming to be human. For minors, operators must provide notifications at start and hourly, prevent sexually explicit content, and prohibit manipulative engagement techniques including reminders to return, excessive praise, mimicking romantic partnerships, simulating emotional distress, promoting isolation, encouraging secrecy from parents, discouraging breaks, and soliciting purchases. All operators must maintain protocols detecting suicidal ideation and self-harm with crisis referrals, including methods for eating disorders. Operators must publicly disclose protocol details and annual crisis referral counts on websites and applications. Violations constitute unfair or deceptive acts under Washington's Consumer Protection Act. Educational chatbots are exempt.`,scope:"Everyone",type:"Companion Chatbots"}
+  ]},
+  {state:"West Virginia",bills:[]},
+  {state:"Wisconsin",bills:[
+    {bill:"SB 939",desc:`This bill prohibits operators from making companion chatbots available to children unless they incorporate safety measures preventing the chatbot from encouraging self-harm, suicidal ideation, violence, illegal activity, or offering mental health services without professional supervision. Chatbots cannot depict sexually explicit conduct, prioritize validation over safety, or optimize engagement beyond safety guardrails. Until January 1, 2027, operators need only comply if they have actual knowledge the user is a child. The Department of Agriculture, Trade and Consumer Protection or Department of Justice can recover civil forfeitures up to $25,000 per violation, seek injunctions, and recover court costs and attorney fees. Children who suffer actual harm or their parents can sue for actual and punitive damages plus attorney fees and equitable relief.`,scope:"Minors",type:"Companion Chatbots"},
+    {bill:"AB 965",desc:`Assembly companion to SB 939. Crossfiled bill prohibiting operators from making companion chatbots available to children without safety measures preventing the chatbot from encouraging self-harm, suicidal ideation, violence, or illegal activity.`,scope:"Minors",type:"Companion Chatbots"}
+  ]},
+  {state:"Wyoming",bills:[]}
+];
+
+// ── Status & companion map (key: "State:Bill") ────────────────────────
+const STATUS_MAP = {
+  "Alabama:AL HB324":   {status:"Introduced, Pending House Judiciary"},
+  "Alabama:AL HB325":   {status:"Introduced, Pending House Judiciary"},
+  "Arizona:HB 2737":    {status:"Passed House"},
+  "California:SB 243":  {status:"Signed by Governor (Enacted)"},
+  "California:AB 1988": {status:"Passed Committee, advancing in Assembly"},
+  "California:SB 300":  {status:"Passed Senate, now in Assembly (Engrossed)"},
+  "Colorado:HB 26-1263":{status:"Signed by Governor (Enacted)"},
+  "Connecticut:SB 5":   {status:"Signed by Governor (Enacted, May 27 2026)",companion:"CT SB 86 (merged into SB 5)"},
+  "Connecticut:SB 86":  {status:"Merged into SB 5; provisions absorbed, SB 86 superseded",companion:"CT SB 5"},
+  "Florida:HB 659":     {status:"Died in committee (House, March 13 2026)",companion:"FL SB 1344"},
+  "Florida:SB 1344":    {status:"Died in committee (Senate, March 13 2026)",companion:"FL HB 659"},
+  "Hawaii:HB 1782":     {status:"Passed both chambers, in conference committee (as of April 23 2026)",companion:"HI SB 2788"},
+  "Hawaii:SB 2788":     {status:"Passed both chambers, in conference committee (as of April 23 2026)",companion:"HI HB 1782"},
+  "Hawaii:HB 639":      {status:"Introduced / carried over, pending in committee"},
+  "Idaho:S 1297":       {status:"Signed by Governor (Enacted)"},
+  "Illinois:SB 3368":   {status:"In committee (re-referred to Assignments, May 22 2026)"},
+  "Illinois:HB 4705":   {status:"Introduced, in committee",companion:"IL SB 3261"},
+  "Iowa:HF 2204":       {status:"Stalled in committee (approved by committee 18-3 on March 6, no further movement)"},
+  "Iowa:SF 2417":       {status:"Passed both chambers, signed by Governor",companion:"IA HF 2507 (withdrawn)"},
+  "Kansas:HB 2671":     {status:"Pending in committee (Legislative Modernization, referred Feb 3 2026)"},
+  "Kentucky:HB 227":    {status:"Passed House (96–0), now in Senate"},
+  "Louisiana:SB 5":     {status:"Pending in Senate Health and Welfare Committee"},
+  "Maine:LD 2162":      {status:"Passed both chambers, enrolled and sent to Governor",companion:"ME LD 2082 (companion in spirit)"},
+  "Maine:LD 2082":      {status:"Passed both House and Senate, approved in concurrence",companion:"ME LD 2162 (companion in spirit)"},
+  "Maryland:SB 827":    {status:"Introduced, in Senate Finance Committee",companion:"MD HB 1250"},
+  "Maryland:HB 883":    {status:"In committee (separate behavioral-health AI chatbot bill)"},
+  "Maryland:HB 952":    {status:"Passed House (123–4), in Senate Finance Committee"},
+  "Massachusetts:S 243":{status:"Pending in committee"},
+  "Massachusetts:S 264":{status:"Pending in committee"},
+  "Michigan:SB 760":    {status:"Passed Senate (20–17), now in House"},
+  "Minnesota:SF 1857":  {status:"Pending in committee (Senate Judiciary and Public Safety hearing held March 2026)"},
+  "Minnesota:SF 1886":  {status:"Pending in committee (Senate Judiciary and Public Safety hearing held March 2026)"},
+  "Missouri:HB 2031":   {status:"Pending in committee",companion:"MO HB 2032"},
+  "Missouri:HB 2032":   {status:"Passed House committee with substitute (HCS Do Pass, April 2 2026), awaiting full House vote",companion:"MO SB 1455"},
+  "Missouri:HB 1742":   {status:"Early stage, Read Second Time (House)"},
+  "Missouri:SB 1455":   {status:"First Read in Senate, no further movement",companion:"MO HB 2032"},
+  "Missouri:HB 2368":   {status:"Passed House committee (March 2026)"},
+  "Nebraska:LB 939":    {status:"Stalled (deprioritized in favor of LB 1083, which also stalled)"},
+  "Nebraska:LB 1185":   {status:"Signed by Governor (Enacted, April 17 2026, attached to LB 525)"},
+  "New Jersey:A 2710":  {status:"Introduced, in Assembly Science, Innovation and Technology Committee"},
+  "New Mexico:HB 174":  {status:"Died (Action Postponed Indefinitely, Jan 27 2026; session closed without passage)"},
+  "New York:S 09051":   {status:"Passed both chambers unanimously, awaiting Governor's signature"},
+  "New York:S 05668":   {status:"Pending in committee",companion:"NY A 222"},
+  "New York:A 09317":   {status:"Pending in committee"},
+  "New York:A 06767":   {status:"Pending in committee"},
+  "New York:S 7263":    {status:"Passed committee (Feb 25 2026), advancing",companion:"NY A 6545"},
+  "New York:A 06545":   {status:"Passed committee",companion:"NY S 7263"},
+  "North Carolina:S 624":{status:"Introduced, pending"},
+  "Oklahoma:HB 3544":   {status:"Passed chamber of origin, passed second-chamber committee",companion:"OK SB 1521"},
+  "Oklahoma:SB 1521":   {status:"Passed chamber of origin, passed second-chamber committee",companion:"OK HB 3544"},
+  "Oklahoma:SB 2085":   {status:"Pending in committee (Technology and Telecommunications, referred Feb 4 2026)"},
+  "Pennsylvania:SB 1090":{status:"Passed Senate (49–1), now in House",companion:"PA HB 2006"},
+  "Pennsylvania:HB 2006":{status:"Pending in House",companion:"PA SB 1090"},
+  "Pennsylvania:HB 2175":{status:"Pending in committee"},
+  "Pennsylvania:HB 2100":{status:"Pending in committee"},
+  "Rhode Island:S 2195": {status:"Passed Senate unanimously (37–0), now in House Innovation Committee",companion:"RI H7350"},
+  "Rhode Island:H 7350": {status:"Pending in House Innovation Committee",companion:"RI S 2195"},
+  "South Carolina:S 0896":{status:"Passed Senate committee with amendment (May 6 2026), on Senate calendar for second reading",companion:"SC H 5138"},
+  "South Carolina:H 5138":{status:"Pending in House Labor, Commerce and Industry Committee",companion:"SC S 0896"},
+  "South Dakota:SB 168": {status:"Died in committee (effectively killed, Feb 2026)"},
+  "South Dakota:SB 170": {status:"Pending (hearing held Feb 17 2026, outcome unclear)"},
+  "Tennessee:HB 1946":   {status:"Abandoned in favor of TN SB 1700 (companion), which passed both chambers and was signed"},
+  "Tennessee:HB 19898":  {status:"Status unconfirmed"},
+  "Tennessee:HB 1470":   {status:"Companion bill TN SB 1580 passed and was signed by Governor; HB 1470 itself was recommended for passage by House subcommittee"},
+  "Vermont:H 0784":      {status:"Pending in Committee on Commerce and Economic Development"},
+  "Vermont:H 0783":      {status:"Pending in Committee on Commerce and Economic Development"},
+  "Vermont:H 0804":      {status:"Pending in Committee on Commerce and Economic Development"},
+  "Virginia:SB 796":     {status:"Passed Senate (Engrossed); carried over to 2027 session by House Communications, Technology and Innovation Committee"},
+  "Virginia:HB 635":     {status:"Continued to 2027 session in House Communications, Technology and Innovation Committee (Feb 9, 2026)"},
+  "Virginia:HB 758":     {status:"Left in House Communications, Technology and Innovation Committee"},
+  "Washington:SB 5984":  {status:"Passed Senate 38–11 (Feb 12, 2026), stalled in House Rules; superseded by companion HB 2225",companion:"WA HB 2225"},
+  "Washington:HB 2225":  {status:"Signed by Governor; effective Jan 1, 2027",companion:"WA SB 5984"},
+  "Wisconsin:SB 939":    {status:"Introduced, Pending Senate Utilities, Technology and Tourism",companion:"WI AB 965"},
+  "Wisconsin:AB 965":    {status:"Crossfiled with SB 939; Assembly Amendment 1 offered Feb 5, 2026; no further action",companion:"WI SB 939"},
+};
+
+// ── Charts ────────────────────────────────────────────────────────────
+function statusCategory(s){
+  if(!s)return"pending";
+  const t=s.toLowerCase();
+  if(/signed by governor|enacted|signed by/.test(t))return"enacted";
+  if(/died|killed|postponed indefinitely|abandoned|merged into|superseded/.test(t))return"dead";
+  if(/passed|engrossed|awaiting governor/.test(t))return"passed";
+  return"pending";
+}
+
+function initCharts(){
+  let gp=0,mp=0;
+  const statusCounts={enacted:0,passed:0,pending:0,dead:0};
+  DATA.forEach(s=>s.bills.forEach(b=>{
+    if(!b.scope)return;
+    if(b.scope==="Everyone")gp++;
+    else if(b.scope==="Minors")mp++;
+    const info=STATUS_MAP[s.state+":"+b.bill]||{};
+    const cat=statusCategory(info.status);
+    statusCounts[cat]++;
+  }));
+  const scopeTotal=gp+mp;
+  const statusTotal=Object.values(statusCounts).reduce((a,b)=>a+b,0);
+
+  // External tooltip rendered as a DOM element so it's never clipped by canvas bounds
+  let chartTip=document.getElementById("chartTooltip");
+  if(!chartTip){
+    chartTip=document.createElement("div");
+    chartTip.id="chartTooltip";
+    chartTip.className="map-tooltip";
+    document.body.appendChild(chartTip);
+  }
+  const externalTooltip=(context)=>{
+    const {chart,tooltip}=context;
+    if(tooltip.opacity===0){chartTip.style.opacity="0";return;}
+    const rect=chart.canvas.getBoundingClientRect();
+    const label=tooltip.dataPoints[0].label;
+    const raw=tooltip.dataPoints[0].raw;
+    const pct=Math.round(raw/tooltip.dataPoints[0].dataset.data.reduce((a,b)=>a+b,0)*100);
+    chartTip.innerHTML=`<strong>${label}</strong>${raw} bills (${pct}%)`;
+    chartTip.style.opacity="1";
+    chartTip.style.left=(rect.left+window.scrollX+tooltip.caretX+12)+"px";
+    chartTip.style.top=(rect.top+window.scrollY+tooltip.caretY-36)+"px";
+  };
+
+  const doughnutOpts=()=>({
+    cutout:"68%",responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{display:false},tooltip:{enabled:false,external:externalTooltip}}
+  });
+
+  new Chart(document.getElementById("scopeChart"),{
+    type:"doughnut",
+    data:{labels:["General Protections","Minor Protections"],
+      datasets:[{data:[gp,mp],backgroundColor:["#3A8C64","#7A5090"],borderColor:["#2A6A4A","#5C3868"],borderWidth:2,hoverOffset:5}]},
+    options:doughnutOpts()
+  });
+
+  new Chart(document.getElementById("statusChart"),{
+    type:"doughnut",
+    data:{
+      labels:["Enacted","Passed/Advancing","In Committee / Pending","Died / Stalled"],
+      datasets:[{
+        data:[statusCounts.enacted,statusCounts.passed,statusCounts.pending,statusCounts.dead],
+        backgroundColor:["#1A6A40","#4E6898","#8A847C","#B03030"],
+        borderColor:["#124A2E","#364878","#6A645C","#802020"],
+        borderWidth:2,hoverOffset:5
+      }]
+    },
+    options:doughnutOpts()
+  });
+
+  const mkLegend=(id,items)=>{
+    const el=document.getElementById(id);
+    items.forEach(([label,color,count])=>{
+      el.insertAdjacentHTML("beforeend",
+        `<div class="legend-item"><span class="legend-dot" style="background:${color}"></span><span>${label}</span></div>`);
+    });
+  };
+  // Top 5 states
+  const top5=DATA.map(s=>({state:s.state,count:s.bills.length}))
+    .filter(x=>x.count>0).sort((a,b)=>b.count-a.count).slice(0,5);
+  const list=document.getElementById("top5List");
+  top5.forEach((x,i)=>{
+    list.insertAdjacentHTML("beforeend",
+      `<li class="top5-item"><span class="top5-rank">#${i+1}</span><span class="top5-state">${x.state}</span><span class="top5-count">${x.count} bill${x.count!==1?"s":""}</span></li>`);
+  });
+
+  mkLegend("statusLegend",[
+    ["Enacted","#1A6A40",statusCounts.enacted],
+    ["Passed / Advancing","#4E6898",statusCounts.passed],
+    ["In Committee / Pending","#8A847C",statusCounts.pending],
+    ["Died / Stalled","#B03030",statusCounts.dead]
+  ]);
+  mkLegend("scopeLegend",[["General Protections","#3A8C64",gp],["Minor Protections","#7A5090",mp]]);
+}
+
+// ── Tiles ─────────────────────────────────────────────────────────────
+function tagHTML(scope,type){
+  let h="";
+  if(scope==="Everyone")h+=`<span class="tag tag-gp">General Protections</span>`;
+  if(scope==="Minors")h+=`<span class="tag tag-mp">Minor Protections</span>`;
+  if(type==="General Chatbots")h+=`<span class="tag tag-gc">General Chatbots</span>`;
+  if(type==="Companion Chatbots")h+=`<span class="tag tag-cc">Companion Chatbots</span>`;
+  return h;
+}
+
+function initGrid(){
+  const grid=document.getElementById("stateGrid");
+  DATA.forEach(s=>{
+    const hasBills=s.bills.length>0;
+    const hasGP=s.bills.some(b=>b.scope==="Everyone");
+    const hasMP=s.bills.some(b=>b.scope==="Minors");
+    const hasGC=s.bills.some(b=>b.type==="General Chatbots");
+    const hasCC=s.bills.some(b=>b.type==="Companion Chatbots");
+
+    const tile=document.createElement("div");
+    tile.className="state-tile"+(hasBills?"":" no-bills");
+    tile.dataset.state=s.state.toLowerCase();
+    tile.dataset.gp=hasGP?"1":"0";
+    tile.dataset.mp=hasMP?"1":"0";
+    tile.dataset.gc=hasGC?"1":"0";
+    tile.dataset.cc=hasCC?"1":"0";
+
+    if(hasBills){
+      const scopeTags=(hasGP?`<span class="tag tag-gp">General Protections</span>`:"")+
+                      (hasMP?`<span class="tag tag-mp">Minor Protections</span>`:"");
+      const typeTags=(hasGC?`<span class="tag tag-gc">General Chatbots</span>`:"")+
+                     (hasCC?`<span class="tag tag-cc">Companion Chatbots</span>`:"");
+      tile.innerHTML=`
+        <div class="tile-name">${s.state}</div>
+        <div class="tile-count"><strong>${s.bills.length}</strong> bill${s.bills.length!==1?"s":""}</div>
+        <div class="tile-tags">${scopeTags}${typeTags}</div>`;
+      tile.addEventListener("click",()=>openModal(s));
+    } else {
+      tile.innerHTML=`<div class="tile-name">${s.state}</div><div class="tile-count empty">No relevant bills</div>`;
+    }
+    grid.appendChild(tile);
+  });
+  updateCount();
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────
+function statusClass(s){
+  const t=s.toLowerCase();
+  if(/signed by governor|enacted|signed by/.test(t))return"s-enacted";
+  if(/died|killed|postponed indefinitely|abandoned|merged into|superseded/.test(t))return"s-dead";
+  if(/passed|engrossed|awaiting governor/.test(t))return"s-passed";
+  return"s-pending";
+}
+function openModal(s){
+  document.getElementById("modalTitle").textContent=s.state;
+  const body=document.getElementById("modalBody");
+  body.innerHTML="";
+  s.bills.forEach(b=>{
+    const tags=tagHTML(b.scope,b.type);
+    const info=STATUS_MAP[s.state+":"+b.bill]||{};
+    const statusHtml=info.status?`<div class="bill-status ${statusClass(info.status)}">${info.status}</div>`:"";
+    const companionHtml=info.companion?`<div class="bill-companion">Companion to: ${info.companion}</div>`:"";
+    body.insertAdjacentHTML("beforeend",`
+      <div class="bill-card">
+        <div class="bill-name">${b.bill}</div>
+        ${statusHtml}
+        ${companionHtml}
+        ${b.desc?`<div class="bill-desc">${b.desc}</div>`:""}
+        ${tags?`<div class="bill-tags">${tags}</div>`:""}
+      </div>`);
+  });
+  document.getElementById("modalOverlay").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeModal(){
+  document.getElementById("modalOverlay").classList.remove("open");
+  document.body.style.overflow="";
+}
+document.getElementById("modalClose").addEventListener("click",closeModal);
+document.getElementById("modalOverlay").addEventListener("click",e=>{if(e.target===e.currentTarget)closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+
+// ── Filters ───────────────────────────────────────────────────────────
+const active=new Set();
+
+function updateCount(){
+  const tiles=[...document.querySelectorAll(".state-tile:not(.no-bills)")];
+  const vis=tiles.filter(t=>!t.classList.contains("hidden")).length;
+  document.getElementById("resultsCount").textContent=`${vis} state${vis!==1?"s":""} with bills`;
+  const allVis=[...document.querySelectorAll(".state-tile")].some(t=>!t.classList.contains("hidden"));
+  document.getElementById("noResults").style.display=allVis?"none":"block";
+}
+
+function applyFilters(){
+  const q=document.getElementById("searchInput").value.toLowerCase().trim();
+  const scopeF=[...active].filter(f=>f.startsWith("scope"));
+  const typeF=[...active].filter(f=>f.startsWith("type"));
+
+  document.querySelectorAll(".state-tile").forEach(tile=>{
+    const hasBills=!tile.classList.contains("no-bills");
+    if(q&&!tile.dataset.state.includes(q)){tile.classList.add("hidden");return;}
+    if(!active.size){tile.classList.remove("hidden");return;}
+    if(!hasBills){tile.classList.add("hidden");return;}
+
+    const sm=!scopeF.length||scopeF.some(f=>(f==="scope-general"&&tile.dataset.gp==="1")||(f==="scope-minor"&&tile.dataset.mp==="1"));
+    const tm=!typeF.length||typeF.some(f=>(f==="type-general"&&tile.dataset.gc==="1")||(f==="type-companion"&&tile.dataset.cc==="1"));
+    tile.classList.toggle("hidden",!(sm&&tm));
+  });
+  updateCount();
+}
+
+document.querySelectorAll(".filter-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const f=btn.dataset.filter;
+    active.has(f)?active.delete(f):active.add(f);
+    btn.classList.toggle("active",active.has(f));
+    applyFilters();
+  });
+});
+document.getElementById("searchInput").addEventListener("input",applyFilters);
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  active.clear();
+  document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("searchInput").value="";
+  applyFilters();
+});
+
+// ── Map ───────────────────────────────────────────────────────────────
+function initMap(){
+  const billCounts={};
+  DATA.forEach(s=>{ billCounts[s.state]=s.bills.length; });
+  const colorScale=d3.scaleThreshold()
+    .domain([1,2,4,6])
+    .range(["#DDD8CE","#AECFBE","#5EA888","#2A7A5A","#16493A"]);
+  const container=document.getElementById("usMap");
+  const w=container.offsetWidth||960, h=Math.round(w*0.6);
+  const svg=d3.select("#usMap").append("svg")
+    .attr("viewBox",`0 0 ${w} ${h}`)
+    .attr("preserveAspectRatio","xMidYMid meet")
+    .style("width","100%");
+  const tooltip=d3.select("body").append("div").attr("class","map-tooltip");
+  fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json")
+    .then(r=>r.json())
+    .then(us=>{
+      const states=topojson.feature(us,us.objects.states);
+      const projection=d3.geoAlbersUsa().fitSize([w,h],states);
+      const path=d3.geoPath().projection(projection);
+      svg.selectAll("path")
+        .data(states.features)
+        .enter().append("path")
+        .attr("d",path)
+        .attr("fill",d=>colorScale(billCounts[d.properties.name]||0))
+        .attr("stroke","#C4BEB4")
+        .attr("stroke-width","0.5")
+        .style("cursor","pointer")
+        .on("mouseover",function(event,d){
+          d3.select(this).attr("stroke-width","2").attr("stroke","#8B4020");
+          const count=billCounts[d.properties.name]||0;
+          tooltip.style("opacity","1")
+            .html(`<strong>${d.properties.name}</strong>${count>0?count+" bill"+(count!==1?"s":""):"No relevant bills"}`);
+        })
+        .on("mousemove",function(event){
+          tooltip.style("left",(event.pageX+12)+"px").style("top",(event.pageY-36)+"px");
+        })
+        .on("mouseout",function(){
+          d3.select(this).attr("stroke-width","0.5").attr("stroke","#C4BEB4");
+          tooltip.style("opacity","0");
+        })
+        .on("click",function(event,d){
+          const stateObj=DATA.find(s=>s.state===d.properties.name);
+          if(stateObj&&stateObj.bills.length>0){
+            openModal(stateObj);
+          } else {
+            const count=billCounts[d.properties.name]||0;
+            if(count===0){
+              tooltip.style("opacity","1")
+                .html(`<strong>${d.properties.name}</strong>No relevant bills`)
+                .style("left",(event.pageX+12)+"px").style("top",(event.pageY-36)+"px");
+              setTimeout(()=>tooltip.style("opacity","0"),1800);
+            }
+          }
+        });
+    });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+document.getElementById("lastUpdated").textContent = LAST_UPDATED;
+initCharts();
+initGrid();
+initMap();
+
+// Intro popup + scroll hint
+(function(){
+  const overlay=document.getElementById("introOverlay");
+  const hint=document.getElementById("scrollHint");
+  const mapSection=document.querySelector(".map-section");
+
+  // ── Scroll hint: show 6s after page load if user hasn't scrolled ──
+  let hintDone=false;
+  const hintTimer=setTimeout(()=>{
+    if(hintDone)return;
+    if(window.scrollY>60){hintDone=true;return;}
+    hintDone=true;
+    hint.classList.add("visible");
+  },6000);
+  window.addEventListener("scroll",()=>{
+    if(!hintDone&&window.scrollY>60){
+      hintDone=true;
+      clearTimeout(hintTimer);
+    }
+  },{passive:true});
+
+  // ── Intro popup: show when user scrolls past the map ──
+  let popupShown=false;
+  const checkMapScroll=()=>{
+    if(popupShown)return;
+    const r=mapSection.getBoundingClientRect();
+    // Trigger once ~70px of the map section has scrolled above the viewport top
+    // (just past the "Bills by State" title, map itself just starting to be hidden)
+    if(r.top<-70){
+      popupShown=true;
+      window.removeEventListener("scroll",checkMapScroll);
+      overlay.classList.add("open");
+    }
+  };
+  window.addEventListener("scroll",checkMapScroll,{passive:true});
+
+  // ── Close handlers ──
+  const closeIntro=()=>overlay.classList.remove("open");
+  document.getElementById("introClose").addEventListener("click",closeIntro);
+  overlay.addEventListener("click",e=>{ if(e.target===overlay)closeIntro(); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape")closeIntro(); });
+})();
+</script>
+</body>
+</html>
